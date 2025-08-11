@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mednafen UI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <div><strong>Mednafen UI</strong></div>
+      <div id="mednafenPath" class="small path-text"></div>
+    </div>
+    <div class="header-right">
+      <button id="btnSetExe">Set mednafen.exe Path</button>
+      <button id="btnToggleDarkMode">Dark Mode</button>
+    </div>
+  </header>
+  <div class="container">
+    <div class="row button-row">
+      <button id="btnSelectRomFolder">Select ROM Folder</button>
+      <button id="btnScan">Scan Selected Folder</button>
+    </div>
+    <div class="row search-row">
+      <input type="text" id="searchBar" placeholder="Search for a game..." />
+    </div>
+    <div class="game-list" id="gameList"></div>
+  </div>
+
+  <script>
+    const mednafenPathEl = document.getElementById('mednafenPath');
+    const searchBarEl = document.getElementById('searchBar');
+    let lastSelectedFolder = '';
+    let allGames = [];
+
+    async function loadMednafenPath(){
+      const p = await window.api.getMednafenPath();
+      mednafenPathEl.textContent = p ? ('mednafen: ' + p) : 'mednafen: (using system PATH)';
+    }
+
+    async function loadLastSelectedFolder() {
+      const folder = await window.api.getLastRomFolder();
+      if (folder) {
+        lastSelectedFolder = folder;
+      }
+    }
+
+    async function loadDarkModeState() {
+      const isDarkMode = await window.api.getDarkModeState();
+      const body = document.body;
+      const darkModeToggle = document.getElementById('btnToggleDarkMode');
+
+      if (isDarkMode) {
+        body.classList.add('dark-mode');
+        darkModeToggle.textContent = 'Light Mode';
+      } else {
+        body.classList.remove('dark-mode');
+        darkModeToggle.textContent = 'Dark Mode';
+      }
+    }
+    
+    loadMednafenPath();
+    loadLastSelectedFolder();
+    loadDarkModeState();
+
+    const darkModeToggle = document.getElementById('btnToggleDarkMode');
+    darkModeToggle.addEventListener('click', async () => {
+      const body = document.body;
+      body.classList.toggle('dark-mode');
+      const isNowDarkMode = body.classList.contains('dark-mode');
+
+      darkModeToggle.textContent = isNowDarkMode ? 'Light Mode' : 'Dark Mode';
+      await window.api.setDarkModeState(isNowDarkMode);
+    });
+
+    document.getElementById('btnSetExe').addEventListener('click', async ()=>{
+      const execPath = await window.api.selectMednafenExec();
+      if (!execPath) return;
+      loadMednafenPath();
+    });
+
+    document.getElementById('btnSelectRomFolder').addEventListener('click', async ()=>{
+      const folder = await window.api.selectFolder();
+      if (!folder) return;
+      lastSelectedFolder = folder;
+      alert('Selected ROM folder: ' + folder);
+    });
+
+    document.getElementById('btnScan').addEventListener('click', async ()=>{
+      if (!lastSelectedFolder) return alert('Select a ROM folder first');
+      const res = await window.api.scanFolder(lastSelectedFolder);
+      if (res && res.error) return alert(res.error);
+      await refreshList();
+    });
+
+    async function refreshList(searchQuery = searchBarEl.value){
+        if (searchQuery === searchBarEl.value) {
+            allGames = await window.api.getGames();
+        }
+
+        const filteredGames = allGames.filter(game => 
+            game.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+      const container = document.getElementById('gameList');
+      container.innerHTML = '';
+      
+      const groupedGames = filteredGames.reduce((acc, game) => {
+        (acc[game.system] = acc[game.system] || []).push(game);
+        return acc;
+      }, {});
+
+      for (const system in groupedGames) {
+        const systemGroupEl = document.createElement('div');
+        systemGroupEl.className = 'system-group';
+        systemGroupEl.innerHTML = `<h2 class="system-header">
+            <span class="toggle-icon">▼</span> ${escapeHtml(system)}
+        </h2>
+        <div class="game-list-per-system"></div>`;
+        
+        const gamesForSystem = groupedGames[system];
+        const gameListContainer = systemGroupEl.querySelector('.game-list-per-system');
+
+        for (const g of gamesForSystem) {
+          const el = document.createElement('div'); el.className='card';
+          el.innerHTML = `
+            <div class="game-details">
+              <strong>${escapeHtml(g.name)}</strong>
+            </div>
+            <div style='display:flex;flex-direction:column;gap:6px'>
+              <button data-run='${g.path}'>Run</button>
+            </div>`;
+          gameListContainer.appendChild(el);
+        }
+        container.appendChild(systemGroupEl);
+      }
+
+      container.querySelectorAll('[data-run]').forEach(b=>{
+        b.addEventListener('click', async (ev)=>{
+          const p = ev.currentTarget.getAttribute('data-run');
+          const res = await window.api.runGame(p);
+          if (res && res.error) alert('Error: ' + res.error);
+        });
+      });
+
+      container.querySelectorAll('.system-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const gameList = header.nextElementSibling;
+            const icon = header.querySelector('.toggle-icon');
+            if (gameList.style.display === 'none') {
+                gameList.style.display = 'flex';
+                icon.textContent = '▼';
+            } else {
+                gameList.style.display = 'none';
+                icon.textContent = '▶';
+            }
+        });
+      });
+    }
+
+    function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[c]); }
+
+    refreshList();
+    searchBarEl.addEventListener('keyup', () => refreshList(searchBarEl.value));
+
+    window.api.onRunError(msg => alert('Mednafen run error: ' + msg));
+    window.api.onRunClosed(code => console.log('Mednafen closed with code', code));
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "mednafen-ui",
+  "version": "0.1.1",
+  "description": "Simple Electron UI for Mednafen — select, import and run games.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-packager . mednafen-ui --platform=darwin,win32,linux --out=dist --overwrite"
+  },
+  "devDependencies": {
+    "electron": "^26.0.0"
+  }
+}
