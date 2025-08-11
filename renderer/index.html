@@ -4,13 +4,13 @@
   <meta charset="utf-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mednafen UI</title>
+  <title>Meguidnafen</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
     <div class="header-left">
-      <div><strong>Mednafen UI</strong></div>
+      <div><strong>Meguidnafen</strong></div>
       <div id="mednafenPath" class="small path-text"></div>
     </div>
     <div class="header-right">
@@ -20,8 +20,15 @@
   </header>
   <div class="container">
     <div class="row button-row">
-      <button id="btnSelectRomFolder">Select ROM Folder</button>
+      <select id="systemDropdown"></select>
+      <button id="btnSelectRomFolder">Set ROM Folder</button>
       <button id="btnScan">Scan Selected Folder</button>
+    </div>
+    <div class="row" style="text-align: center;">
+      <div id="selectedFolderPath" class="small path-text">No folder selected</div>
+    </div>
+    <div class="row delete-row">
+        <button id="btnDeleteSelected" class="delete-button" disabled>Delete Selected</button>
     </div>
     <div class="row search-row">
       <input type="text" id="searchBar" placeholder="Search for a game..." />
@@ -32,46 +39,132 @@
   <script>
     const mednafenPathEl = document.getElementById('mednafenPath');
     const searchBarEl = document.getElementById('searchBar');
-    let lastSelectedFolder = '';
+    const systemDropdown = document.getElementById('systemDropdown');
+    const selectedFolderPathEl = document.getElementById('selectedFolderPath');
+    const btnDeleteSelected = document.getElementById('btnDeleteSelected');
+    const btnToggleDarkMode = document.getElementById('btnToggleDarkMode');
     let allGames = [];
+    let systemFolders = {};
+
+    const ALL_SYSTEMS = [
+        'PlayStation',
+        'Sega Saturn',
+        'Super Nintendo Entertainment System',
+        'Nintendo Entertainment System',
+        'Game Boy Advance',
+        'Game Boy / Color',
+        'PC Engine SuperGrafx',
+        'Sega Genesis',
+        'Master System',
+        'Game Gear',
+        'Atari 2600',
+        'Atari Lynx',
+        'PC-FX',
+        'Virtual Boy',
+        'WonderSwan',
+        'Neo Geo Pocket / Color'
+    ].sort();
+
+    function populateSystemDropdown() {
+        ALL_SYSTEMS.forEach(system => {
+            const option = document.createElement('option');
+            option.value = system;
+            option.textContent = system;
+            systemDropdown.appendChild(option);
+        });
+    }
 
     async function loadMednafenPath(){
       const p = await window.api.getMednafenPath();
       mednafenPathEl.textContent = p ? ('mednafen: ' + p) : 'mednafen: (using system PATH)';
     }
 
-    async function loadLastSelectedFolder() {
-      const folder = await window.api.getLastRomFolder();
-      if (folder) {
-        lastSelectedFolder = folder;
-      }
+    async function loadSystemFolders() {
+        systemFolders = await window.api.getSystemFolders();
+        updateSelectedFolderPath();
     }
 
     async function loadDarkModeState() {
       const isDarkMode = await window.api.getDarkModeState();
       const body = document.body;
-      const darkModeToggle = document.getElementById('btnToggleDarkMode');
 
       if (isDarkMode) {
         body.classList.add('dark-mode');
-        darkModeToggle.textContent = 'Light Mode';
+        btnToggleDarkMode.textContent = 'Light Mode';
       } else {
         body.classList.remove('dark-mode');
-        darkModeToggle.textContent = 'Dark Mode';
+        btnToggleDarkMode.textContent = 'Dark Mode';
       }
     }
     
     loadMednafenPath();
-    loadLastSelectedFolder();
+    populateSystemDropdown();
+    loadSystemFolders();
     loadDarkModeState();
 
-    const darkModeToggle = document.getElementById('btnToggleDarkMode');
-    darkModeToggle.addEventListener('click', async () => {
+    function updateSelectedFolderPath() {
+        const selectedSystem = systemDropdown.value;
+        const folderPath = systemFolders[selectedSystem];
+        selectedFolderPathEl.textContent = folderPath || 'No folder selected';
+    }
+
+    systemDropdown.addEventListener('change', updateSelectedFolderPath);
+    
+    // Logic for delete button state
+    function updateDeleteButtonState() {
+        const selectedCount = document.querySelectorAll('.game-list .card.selected').length;
+        btnDeleteSelected.disabled = selectedCount === 0;
+    }
+
+    btnDeleteSelected.addEventListener('click', async () => {
+      const selectedIds = Array.from(document.querySelectorAll('.game-list .card.selected'))
+          .map(card => card.dataset.gameId);
+      
+      if (selectedIds.length > 0) {
+          const confirmation = confirm(`Are you sure you want to delete ${selectedIds.length} games? This will not delete the actual files.`);
+          if (confirmation) {
+              await window.api.removeGamesByIds(selectedIds);
+              // The local game list is now stale. Let's refresh it.
+              await refreshList(searchBarEl.value); 
+              
+              // This is the critical line. It must be here.
+              updateDeleteButtonState();
+          }
+      }
+    });
+
+    // Delegated event listener for game cards to handle selection
+    document.getElementById('gameList').addEventListener('click', (e) => {
+        const card = e.target.closest('.card');
+        if (card) {
+            // Prevent run button from triggering card selection
+            if (e.target.matches('[data-run]')) {
+                return;
+            }
+            if (e.ctrlKey || e.metaKey) { // For Ctrl (Windows/Linux) or Cmd (Mac)
+                card.classList.toggle('selected');
+            } else {
+                const isSelected = card.classList.contains('selected');
+                document.querySelectorAll('.game-list .card').forEach(c => c.classList.remove('selected'));
+                if (!isSelected) {
+                    card.classList.add('selected');
+                }
+            }
+            updateDeleteButtonState();
+        }
+    });
+
+
+    
+    btnToggleDarkMode.addEventListener('click', async () => {
       const body = document.body;
       body.classList.toggle('dark-mode');
       const isNowDarkMode = body.classList.contains('dark-mode');
 
-      darkModeToggle.textContent = isNowDarkMode ? 'Light Mode' : 'Dark Mode';
+      btnToggleDarkMode.textContent = isNowDarkMode 
+        ? 'Light Mode' 
+        : 'Dark Mode';
+
       await window.api.setDarkModeState(isNowDarkMode);
     });
 
@@ -82,15 +175,17 @@
     });
 
     document.getElementById('btnSelectRomFolder').addEventListener('click', async ()=>{
-      const folder = await window.api.selectFolder();
-      if (!folder) return;
-      lastSelectedFolder = folder;
-      alert('Selected ROM folder: ' + folder);
+        const selectedSystem = systemDropdown.value;
+        const folder = await window.api.selectFolder(selectedSystem);
+        if (!folder) return;
+        systemFolders[selectedSystem] = folder;
+        updateSelectedFolderPath();
     });
 
     document.getElementById('btnScan').addEventListener('click', async ()=>{
-      if (!lastSelectedFolder) return alert('Select a ROM folder first');
-      const res = await window.api.scanFolder(lastSelectedFolder);
+        const selectedSystem = systemDropdown.value;
+        if (!systemFolders[selectedSystem]) return alert('Select a ROM folder for ' + selectedSystem + ' first');
+      const res = await window.api.scanFolder(selectedSystem);
       if (res && res.error) return alert(res.error);
       await refreshList();
     });
@@ -125,12 +220,15 @@
 
         for (const g of gamesForSystem) {
           const el = document.createElement('div'); el.className='card';
+          el.dataset.gameId = g.id;
           el.innerHTML = `
-            <div class="game-details">
-              <strong>${escapeHtml(g.name)}</strong>
-            </div>
-            <div style='display:flex;flex-direction:column;gap:6px'>
-              <button data-run='${g.path}'>Run</button>
+            <div class="card-content">
+              <div class="game-details">
+                <strong>${escapeHtml(g.name)}</strong>
+              </div>
+              <div style='display:flex;flex-direction:column;gap:6px'>
+                <button class="run-button" data-run='${g.path}'>Run</button>
+              </div>
             </div>`;
           gameListContainer.appendChild(el);
         }

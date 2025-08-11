@@ -19,16 +19,13 @@ A new GUI for the mednafen emulator. Works on Windows, Linux, and macOS.
 
 ## Importing Games 🎮
 
-* Use **Select Folder -> Scan Selected Folder** to scan for common ROM extensions.
-* **Drag-and-drop** or **Import folder** are also supported.
+* Select the system you want to import games for, and click **Select ROM Folder** then **Scan Selected Folder** to import games.
 * The UI saves basic info in **userData.json**.
 
 ***
 
 ## Security 🔒
 
-* The renderer is **sandboxed** (`contextIsolation=true`).
-* All filesystem and executable work is performed in the main process through **Inter-Process Communication (IPC)**.
 * Works locally without any internet requirements.
 
 Enjoy!

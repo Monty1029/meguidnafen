@@ -19,11 +19,11 @@ function readStore() {
     return {
       games: data.games || [],
       mednafenPath: data.mednafenPath || '',
-      lastRomFolder: data.lastRomFolder || '',
+      systemFolders: data.systemFolders || {},
       darkMode: data.darkMode || false
     };
   } catch (e) {
-    return { games: [], mednafenPath: '', lastRomFolder: '', darkMode: false };
+    return { games: [], mednafenPath: '', systemFolders: {}, darkMode: false };
   }
 }
 
@@ -52,70 +52,35 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-function getSystemFromExt(ext) {
-  switch (ext) {
-    case '.cue':
-    case '.iso':
-    case '.chd':
-    case '.ccd':
-    case '.img':
-    case '.m3u':
-      return 'PlayStation / Sega Saturn';
-    case '.sfc':
-    case '.smc':
-      return 'Super Nintendo Entertainment System';
-    case '.nes':
-      return 'Nintendo Entertainment System';
-    case '.zip':
-      return 'Generic Archive';
-    case '.gba':
-    case '.gb':
-    case '.gbc':
-      return 'Game Boy / Color';
-    case '.pce':
-    case '.sgx':
-      return 'PC Engine SuperGrafx';
-    case '.md':
-    case '.gen':
-      return 'Sega Genesis';
-    case '.sms':
-      return 'Master System';
-    case '.gg':
-      return 'Game Gear';
-    case '.a26':
-      return 'Atari 2600';
-    case '.lnx':
-      return 'Atari Lynx';
-    case '.pcfx':
-      return 'PC-FX';
-    case '.vb':
-      return 'Virtual Boy';
-    case '.ws':
-    case '.wsc':
-      return 'WonderSwan';
-    case '.ngp':
-    case '.ngc':
-      return 'Neo Geo Pocket / Color';
-    default:
-      return 'Unknown';
-  }
-}
-
-ipcMain.handle('select-folder', async () => {
+ipcMain.handle('select-folder', async (event, systemName) => {
   const res = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
   if (res.canceled) return null;
   const selectedPath = res.filePaths[0];
 
   const store = readStore();
-  store.lastRomFolder = selectedPath;
+  
+  // Check for duplicate folder paths across all systems
+  let updatedGames = store.games;
+  for (const existingSystem in store.systemFolders) {
+    if (store.systemFolders[existingSystem] === selectedPath && existingSystem !== systemName) {
+      // If a match is found, remove the games from the old system
+      const filteredGames = updatedGames.filter(g => g.system !== existingSystem);
+      updatedGames = filteredGames;
+      // Also remove the old system's folder path
+      delete store.systemFolders[existingSystem];
+    }
+  }
+
+  store.systemFolders[systemName] = selectedPath;
+  store.games = updatedGames; // Save the filtered games
   writeStore(store);
 
   return selectedPath;
 });
 
-ipcMain.handle('get-last-rom-folder', async () => {
+ipcMain.handle('get-system-folders', async () => {
   const store = readStore();
-  return store.lastRomFolder || '';
+  return store.systemFolders;
 });
 
 ipcMain.handle('select-mednafen-exec', async () => {
@@ -135,7 +100,14 @@ ipcMain.handle('select-mednafen-exec', async () => {
   return selectedPath;
 });
 
-ipcMain.handle('scan-folder', async (event, folder) => {
+ipcMain.handle('scan-folder', async (event, systemName) => {
+  const store = readStore();
+  const folder = store.systemFolders[systemName];
+
+  if (!folder) {
+    return { error: 'No folder selected for this system' };
+  }
+
   const scannedGames = [];
   const cdImageExts = new Set(['.cue', '.iso', '.chd', '.ccd', '.img', '.m3u']);
   const romExts = new Set(['.sfc', '.smc', '.nes', '.zip', '.gba', '.gb', '.gbc', '.pce', '.md', '.a26', '.lnx', '.sms', '.gg', '.sgx', '.pcfx', '.vb', '.ws', '.wsc', '.ngp', '.ngc', '.gen']);
@@ -157,7 +129,7 @@ ipcMain.handle('scan-folder', async (event, folder) => {
     if (cueFiles.length > 0) {
       for (const file of cueFiles) {
         const ext = path.extname(file.name).toLowerCase();
-        scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: getSystemFromExt(ext) });
+        scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: systemName });
       }
     } else {
       const otherCdImages = files.filter(it => {
@@ -166,14 +138,14 @@ ipcMain.handle('scan-folder', async (event, folder) => {
       });
       for (const file of otherCdImages) {
         const ext = path.extname(file.name).toLowerCase();
-        scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: getSystemFromExt(ext) });
+        scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: systemName });
       }
     }
 
     const regularRoms = files.filter(it => romExts.has(path.extname(it.name).toLowerCase()));
     for (const file of regularRoms) {
       const ext = path.extname(file.name).toLowerCase();
-      scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: getSystemFromExt(ext) });
+      scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: systemName });
     }
 
     for (const subDir of subDirs) {
@@ -187,18 +159,19 @@ ipcMain.handle('scan-folder', async (event, folder) => {
     return { error: String(e) };
   }
 
-  const store = readStore();
-  const oldGamesByPath = new Map(store.games.map(g => [g.path, g]));
-  const updatedGames = [];
-
-  for (const scannedGame of scannedGames) {
+  const oldGames = readStore().games;
+  const filteredOldGames = oldGames.filter(g => g.system !== systemName);
+  
+  const oldGamesByPath = new Map(oldGames.map(g => [g.path, g]));
+  const newGamesForSystem = scannedGames.map(scannedGame => {
     if (oldGamesByPath.has(scannedGame.path)) {
-      updatedGames.push(oldGamesByPath.get(scannedGame.path));
+      return oldGamesByPath.get(scannedGame.path);
     } else {
-      updatedGames.push({ ...scannedGame, id: Date.now() + Math.random() });
+      return { ...scannedGame, id: Date.now() + Math.random() };
     }
-  }
+  });
 
+  const updatedGames = [...filteredOldGames, ...newGamesForSystem];
   store.games = updatedGames;
   writeStore(store);
 
@@ -217,9 +190,10 @@ ipcMain.handle('get-games', async () => {
   return store.games;
 });
 
-ipcMain.handle('remove-game', async (event, gameId) => {
+ipcMain.handle('remove-games-by-ids', async (event, gameIds) => {
   const store = readStore();
-  store.games = store.games.filter(g => g.id !== gameId);
+  const gameIdsToRemove = new Set(gameIds);
+  store.games = store.games.filter(g => !gameIdsToRemove.has(String(g.id)));
   writeStore(store);
   return store.games;
 });
@@ -273,7 +247,6 @@ ipcMain.handle('run-game', async (event, gamePath) => {
   }
 });
 
-// New IPC handlers for dark mode state
 ipcMain.handle('set-dark-mode-state', async (event, state) => {
   const store = readStore();
   store.darkMode = state;
