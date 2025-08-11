@@ -1,26 +1,36 @@
-1) How to run
-- Install Node 18+ and npm.
-- Run `npm install` (installs electron). Then `npm start` to launch the UI.
+# Meguidnafen
+**_My Emulator GUI Doesn't Need A Frickin' Excellent Name_**
 
-2) Mednafen
-- The app will try to use `mednafen` from the system PATH. If you want to use a specific executable, click "Set Mednafen Exec" and supply the full path to the mednafen binary.
-- On Windows supply `C:\path\to\mednafen.exe`.
+A new GUI for the mednafen emulator. Works on Windows, Linux, and macOS.
 
-3) Importing games
-- Use Select Folder -> Scan Selected Folder to scan for common ROM extensions (basic list included). Drag-and-drop or Import folder also supported.
-- The UI keeps a simple JSON store in the app data directory for the user.
+## How to Run 🏃‍♂️
 
-4) Security
-- Renderer is sandboxed (contextIsolation=true) and all filesystem/exec work is done in main process through IPC.
+* **Install** Node 18+ and npm.
+* Run `npm install` to install Electron, then `npm start` to launch the UI.
 
-5) Improvements you might want
-- Add metadata scraping (images, descriptions) via a local scraper.
-- Support compressed archives (zip) by letting mednafen handle them or by unzipping.
-- Allow per-system configuration and controller bindings.
-- Add thumbnails and cover art caching.
+***
 
-Enjoy! If you want, I can:
-- convert the renderer to React + Tailwind with a nicer UI,
-- add cover-art scraping and offline storage,
-- add a settings page with per-system mednafen args,
-- package the app for Windows/macOS/Linux.
+## Mednafen 🕹️
+
+* The app will try to use **Mednafen** from the system PATH.
+* To use a specific executable, click **"Set mednafen.exe Path"** and provide the full path to the Mednafen binary.
+
+***
+
+## Importing Games 🎮
+
+* Use **Select Folder -> Scan Selected Folder** to scan for common ROM extensions.
+* **Drag-and-drop** or **Import folder** are also supported.
+* The UI saves basic info in **userData.json**.
+
+***
+
+## Security 🔒
+
+* The renderer is **sandboxed** (`contextIsolation=true`).
+* All filesystem and executable work is performed in the main process through **Inter-Process Communication (IPC)**.
+* Works locally without any internet requirements.
+
+Enjoy!
+
+***
