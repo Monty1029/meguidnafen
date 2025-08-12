@@ -7,10 +7,14 @@ const { spawn } = require('child_process');
 const PROJECT_ROOT = app.getAppPath();
 const USER_DATA_DIR = path.join(PROJECT_ROOT, 'userData');
 const STORE_FILE = path.join(USER_DATA_DIR, 'userData.json');
+const COVER_ART_DIR = path.join(USER_DATA_DIR, 'coverArt');
 
-// Ensure the userData directory exists
+// Ensure the userData and coverArt directories exist
 if (!fs.existsSync(USER_DATA_DIR)) {
   fs.mkdirSync(USER_DATA_DIR);
+}
+if (!fs.existsSync(COVER_ART_DIR)) {
+  fs.mkdirSync(COVER_ART_DIR);
 }
 
 function readStore() {
@@ -34,8 +38,10 @@ function writeStore(data) {
 let mainWindow;
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
+    width: 1280,
+    height: 720,
+    minWidth: 1280,
+    minHeight: 720,
     webPreferences: {
       preload: path.join(PROJECT_ROOT, 'preload.js'),
       contextIsolation: true,
@@ -129,7 +135,13 @@ ipcMain.handle('scan-folder', async (event, systemName) => {
     if (cueFiles.length > 0) {
       for (const file of cueFiles) {
         const ext = path.extname(file.name).toLowerCase();
-        scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: systemName });
+        scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: systemName, game_info: {
+          coverArt: '',
+          developer: '',
+          publisher: '',
+          releaseDate: '',
+          genre: ''
+        } });
       }
     } else {
       const otherCdImages = files.filter(it => {
@@ -138,14 +150,26 @@ ipcMain.handle('scan-folder', async (event, systemName) => {
       });
       for (const file of otherCdImages) {
         const ext = path.extname(file.name).toLowerCase();
-        scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: systemName });
+        scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: systemName, game_info: {
+          coverArt: '',
+          developer: '',
+          publisher: '',
+          releaseDate: '',
+          genre: ''
+        } });
       }
     }
 
     const regularRoms = files.filter(it => romExts.has(path.extname(it.name).toLowerCase()));
     for (const file of regularRoms) {
       const ext = path.extname(file.name).toLowerCase();
-      scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: systemName });
+      scannedGames.push({ name: file.name, path: path.join(dir, file.name), system: systemName, game_info: {
+        coverArt: '',
+        developer: '',
+        publisher: '',
+        releaseDate: '',
+        genre: ''
+      } });
     }
 
     for (const subDir of subDirs) {
@@ -257,4 +281,41 @@ ipcMain.handle('set-dark-mode-state', async (event, state) => {
 ipcMain.handle('get-dark-mode-state', async () => {
   const store = readStore();
   return store.darkMode;
+});
+
+// Update this handler to use 'game_info' instead of 'metadata'
+ipcMain.handle('save-game-info', async (event, gameId, game_info) => {
+  const store = readStore();
+  const game = store.games.find(g => String(g.id) === String(gameId));
+  if (game) {
+    game.game_info = game_info;
+    writeStore(store);
+    return { success: true };
+  }
+  return { success: false, error: 'Game not found' };
+});
+
+ipcMain.handle('select-cover-art', async (event, gameName) => {
+  const res = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'svg'] }
+    ]
+  });
+  
+  if (res.canceled) return null;
+
+  const selectedFilePath = res.filePaths[0];
+  const originalExt = path.extname(selectedFilePath);
+  const baseName = path.basename(gameName, path.extname(gameName));
+  const newFileName = `${baseName}${originalExt}`;
+  const newFilePath = path.join(COVER_ART_DIR, newFileName);
+
+  try {
+    fs.copyFileSync(selectedFilePath, newFilePath);
+    return `userData/coverArt/${newFileName}`;
+  } catch (e) {
+    console.error('Failed to copy cover art:', e);
+    return { error: 'Failed to copy file' };
+  }
 });

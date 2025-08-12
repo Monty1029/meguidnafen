@@ -18,22 +18,46 @@
       <button id="btnToggleDarkMode">Dark Mode</button>
     </div>
   </header>
-  <div class="container">
-    <div class="row button-row">
-      <select id="systemDropdown"></select>
-      <button id="btnSelectRomFolder">Set ROM Folder</button>
-      <button id="btnScan">Scan Selected Folder</button>
-    </div>
-    <div class="row" style="text-align: center;">
-      <div id="selectedFolderPath" class="small path-text">No folder selected</div>
-    </div>
-    <div class="row delete-row">
+  <div class="container main-content-area">
+    <div class="left-pane">
+      <div class="row button-row">
+        <select id="systemDropdown"></select>
+        <button id="btnSelectRomFolder">Set ROM Folder</button>
+        <button id="btnScan">Scan Selected Folder</button>
+      </div>
+      <div class="row" style="text-align: center;">
+        <div id="selectedFolderPath" class="small path-text">No folder selected</div>
+      </div>
+      <div class="row delete-row">
         <button id="btnDeleteSelected" class="delete-button" disabled>Delete Selected</button>
+      </div>
+      <div class="row search-row">
+        <input type="text" id="searchBar" placeholder="Search for a game..." />
+      </div>
+      <div class="game-list" id="gameList"></div>
     </div>
-    <div class="row search-row">
-      <input type="text" id="searchBar" placeholder="Search for a game..." />
+    
+        <div id="infoPane" class="right-pane hidden">
+      <div class="cover-art" id="coverArtContainer">
+        <img id="coverArtImage" src="" alt="Cover Art" class="cover-art-img" style="display:none" />
+        <div id="coverArtPlaceholder">Click to add cover art</div>
+      </div>
+      <h3 id="gameTitle" class="game-title-info"></h3>
+      <div class="game-info-fields">
+        <label>Developer:</label>
+        <input type="text" id="infoDeveloper" />
+        <label>Publisher:</label>
+        <input type="text" id="infoPublisher" />
+        <label>Release Date:</label>
+        <input type="date" id="infoReleaseDate" />
+        <label>Genre:</label>
+        <input type="text" id="infoGenre" />
+      </div>
+        <div class="save-button-container">
+          <button id="btnSaveGameInfo">Save</button>
+        </div>
+      </div>
     </div>
-    <div class="game-list" id="gameList"></div>
   </div>
 
   <script>
@@ -43,35 +67,47 @@
     const selectedFolderPathEl = document.getElementById('selectedFolderPath');
     const btnDeleteSelected = document.getElementById('btnDeleteSelected');
     const btnToggleDarkMode = document.getElementById('btnToggleDarkMode');
+    const infoPane = document.getElementById('infoPane');
+    const coverArtContainer = document.getElementById('coverArtContainer');
+    const coverArtImage = document.getElementById('coverArtImage');
+    const coverArtPlaceholder = document.getElementById('coverArtPlaceholder');
+    const gameTitleEl = document.getElementById('gameTitle');
+    const infoDeveloperEl = document.getElementById('infoDeveloper');
+    const infoPublisherEl = document.getElementById('infoPublisher');
+    const infoReleaseDateEl = document.getElementById('infoReleaseDate');
+    const infoGenreEl = document.getElementById('infoGenre');
+    const btnSaveGameInfo = document.getElementById('btnSaveGameInfo');
+
     let allGames = [];
     let systemFolders = {};
+    let selectedGameId = null;
 
     const ALL_SYSTEMS = [
-        'PlayStation',
-        'Sega Saturn',
-        'Super Nintendo Entertainment System',
-        'Nintendo Entertainment System',
-        'Game Boy Advance',
-        'Game Boy / Color',
-        'PC Engine SuperGrafx',
-        'Sega Genesis',
-        'Master System',
-        'Game Gear',
-        'Atari 2600',
-        'Atari Lynx',
-        'PC-FX',
-        'Virtual Boy',
-        'WonderSwan',
-        'Neo Geo Pocket / Color'
+      'PlayStation',
+      'Sega Saturn',
+      'Super Nintendo Entertainment System',
+      'Nintendo Entertainment System',
+      'Game Boy Advance',
+      'Game Boy / Color',
+      'PC Engine SuperGrafx',
+      'Sega Genesis',
+      'Master System',
+      'Game Gear',
+      'Atari 2600',
+      'Atari Lynx',
+      'PC-FX',
+      'Virtual Boy',
+      'WonderSwan',
+      'Neo Geo Pocket / Color'
     ].sort();
 
     function populateSystemDropdown() {
-        ALL_SYSTEMS.forEach(system => {
-            const option = document.createElement('option');
-            option.value = system;
-            option.textContent = system;
-            systemDropdown.appendChild(option);
-        });
+      ALL_SYSTEMS.forEach(system => {
+        const option = document.createElement('option');
+        option.value = system;
+        option.textContent = system;
+        systemDropdown.appendChild(option);
+      });
     }
 
     async function loadMednafenPath(){
@@ -80,8 +116,8 @@
     }
 
     async function loadSystemFolders() {
-        systemFolders = await window.api.getSystemFolders();
-        updateSelectedFolderPath();
+      systemFolders = await window.api.getSystemFolders();
+      updateSelectedFolderPath();
     }
 
     async function loadDarkModeState() {
@@ -103,58 +139,64 @@
     loadDarkModeState();
 
     function updateSelectedFolderPath() {
-        const selectedSystem = systemDropdown.value;
-        const folderPath = systemFolders[selectedSystem];
-        selectedFolderPathEl.textContent = folderPath || 'No folder selected';
+      const selectedSystem = systemDropdown.value;
+      const folderPath = systemFolders[selectedSystem];
+      selectedFolderPathEl.textContent = folderPath || 'No folder selected';
     }
 
     systemDropdown.addEventListener('change', updateSelectedFolderPath);
     
     // Logic for delete button state
     function updateDeleteButtonState() {
-        const selectedCount = document.querySelectorAll('.game-list .card.selected').length;
-        btnDeleteSelected.disabled = selectedCount === 0;
+      const selectedCount = document.querySelectorAll('.game-list .card.selected').length;
+      btnDeleteSelected.disabled = selectedCount === 0;
     }
 
     btnDeleteSelected.addEventListener('click', async () => {
       const selectedIds = Array.from(document.querySelectorAll('.game-list .card.selected'))
-          .map(card => card.dataset.gameId);
+        .map(card => card.dataset.gameId);
       
       if (selectedIds.length > 0) {
-          const confirmation = confirm(`Are you sure you want to delete ${selectedIds.length} games? This will not delete the actual files.`);
-          if (confirmation) {
-              await window.api.removeGamesByIds(selectedIds);
-              // The local game list is now stale. Let's refresh it.
-              await refreshList(searchBarEl.value); 
-              
-              // This is the critical line. It must be here.
-              updateDeleteButtonState();
-          }
+        const confirmation = confirm(`Are you sure you want to delete ${selectedIds.length} games? This will not delete the actual files.`);
+        if (confirmation) {
+          await window.api.removeGamesByIds(selectedIds);
+          await refreshList(searchBarEl.value); 
+          updateDeleteButtonState();
+        }
       }
     });
 
     // Delegated event listener for game cards to handle selection
     document.getElementById('gameList').addEventListener('click', (e) => {
-        const card = e.target.closest('.card');
-        if (card) {
-            // Prevent run button from triggering card selection
-            if (e.target.matches('[data-run]')) {
-                return;
-            }
-            if (e.ctrlKey || e.metaKey) { // For Ctrl (Windows/Linux) or Cmd (Mac)
-                card.classList.toggle('selected');
-            } else {
-                const isSelected = card.classList.contains('selected');
-                document.querySelectorAll('.game-list .card').forEach(c => c.classList.remove('selected'));
-                if (!isSelected) {
-                    card.classList.add('selected');
-                }
-            }
-            updateDeleteButtonState();
+      const card = e.target.closest('.card');
+      if (card) {
+        if (e.target.matches('[data-run]')) {
+          return;
         }
+        
+        // Handle multi/single selection
+        if (e.ctrlKey || e.metaKey) {
+          card.classList.toggle('selected');
+        } else {
+          const isSelected = card.classList.contains('selected');
+          document.querySelectorAll('.game-list .card').forEach(c => c.classList.remove('selected'));
+          if (!isSelected) {
+            card.classList.add('selected');
+          }
+        }
+        
+        updateDeleteButtonState();
+        
+        // Show info pane for the last clicked card
+        const lastSelectedCard = document.querySelector('.game-list .card.selected');
+        if (lastSelectedCard) {
+          const gameId = lastSelectedCard.dataset.gameId;
+          showInfoPane(gameId);
+        } else {
+          hideInfoPane();
+        }
+      }
     });
-
-
     
     btnToggleDarkMode.addEventListener('click', async () => {
       const body = document.body;
@@ -175,29 +217,29 @@
     });
 
     document.getElementById('btnSelectRomFolder').addEventListener('click', async ()=>{
-        const selectedSystem = systemDropdown.value;
-        const folder = await window.api.selectFolder(selectedSystem);
-        if (!folder) return;
-        systemFolders[selectedSystem] = folder;
-        updateSelectedFolderPath();
+      const selectedSystem = systemDropdown.value;
+      const folder = await window.api.selectFolder(selectedSystem);
+      if (!folder) return;
+      systemFolders[selectedSystem] = folder;
+      updateSelectedFolderPath();
     });
 
     document.getElementById('btnScan').addEventListener('click', async ()=>{
-        const selectedSystem = systemDropdown.value;
-        if (!systemFolders[selectedSystem]) return alert('Select a ROM folder for ' + selectedSystem + ' first');
+      const selectedSystem = systemDropdown.value;
+      if (!systemFolders[selectedSystem]) return alert('Select a ROM folder for ' + selectedSystem + ' first');
       const res = await window.api.scanFolder(selectedSystem);
       if (res && res.error) return alert(res.error);
       await refreshList();
     });
 
     async function refreshList(searchQuery = searchBarEl.value){
-        if (searchQuery === searchBarEl.value) {
-            allGames = await window.api.getGames();
-        }
+      if (searchQuery === searchBarEl.value) {
+        allGames = await window.api.getGames();
+      }
 
-        const filteredGames = allGames.filter(game => 
-            game.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+      const filteredGames = allGames.filter(game => 
+        game.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
 
       const container = document.getElementById('gameList');
       container.innerHTML = '';
@@ -211,7 +253,7 @@
         const systemGroupEl = document.createElement('div');
         systemGroupEl.className = 'system-group';
         systemGroupEl.innerHTML = `<h2 class="system-header">
-            <span class="toggle-icon">▼</span> ${escapeHtml(system)}
+          <span class="toggle-icon">▼</span> ${escapeHtml(system)}
         </h2>
         <div class="game-list-per-system"></div>`;
         
@@ -245,19 +287,124 @@
 
       container.querySelectorAll('.system-header').forEach(header => {
         header.addEventListener('click', () => {
-            const gameList = header.nextElementSibling;
-            const icon = header.querySelector('.toggle-icon');
-            if (gameList.style.display === 'none') {
-                gameList.style.display = 'flex';
-                icon.textContent = '▼';
-            } else {
-                gameList.style.display = 'none';
-                icon.textContent = '▶';
-            }
+          const gameList = header.nextElementSibling;
+          const icon = header.querySelector('.toggle-icon');
+          if (gameList.style.display === 'none') {
+            gameList.style.display = 'flex';
+            icon.textContent = '▼';
+          } else {
+            gameList.style.display = 'none';
+            icon.textContent = '▶';
+          }
         });
       });
+      
+      // Make sure we hide the info pane and clear selection on list refresh
+      hideInfoPane();
     }
 
+    // New info pane functions
+    function showInfoPane(gameId) {
+      const game = allGames.find(g => String(g.id) === String(gameId));
+      if (!game) return;
+
+      selectedGameId = gameId;
+      infoPane.classList.remove('hidden');
+
+      gameTitleEl.textContent = game.name;
+      infoDeveloperEl.value = game.game_info?.developer || '';
+      infoPublisherEl.value = game.game_info?.publisher || '';
+      // The `date` input field expects a 'YYYY-MM-DD' format. We convert our stored 'dd/mm/yyyy' here.
+      if (game.game_info?.releaseDate) {
+        const [day, month, year] = game.game_info.releaseDate.split('/');
+        infoReleaseDateEl.value = `${year}-${month}-${day}`;
+      } else {
+        infoReleaseDateEl.value = '';
+      }
+      infoGenreEl.value = game.game_info?.genre || '';
+
+      const coverArtPath = game.game_info?.coverArt;
+      if (coverArtPath) {
+        coverArtImage.src = coverArtPath;
+        coverArtImage.style.display = 'block';
+        coverArtPlaceholder.style.display = 'none';
+      } else {
+        coverArtImage.style.display = 'none';
+        coverArtPlaceholder.style.display = 'flex';
+      }
+    }
+
+    function hideInfoPane() {
+      infoPane.classList.add('hidden');
+      selectedGameId = null;
+      // Clear the pane's fields
+      gameTitleEl.textContent = '';
+      infoDeveloperEl.value = '';
+      infoPublisherEl.value = '';
+      infoReleaseDateEl.value = '';
+      infoGenreEl.value = '';
+      coverArtImage.style.display = 'none';
+      coverArtPlaceholder.style.display = 'flex';
+    }
+
+    coverArtContainer.addEventListener('click', async () => {
+      if (!selectedGameId) return;
+      
+      const game = allGames.find(g => String(g.id) === String(selectedGameId));
+      if (!game) return;
+      
+      const coverArtPath = await window.api.selectCoverArt(game.name);
+      
+      if (coverArtPath && !coverArtPath.error) {
+        const gameToUpdate = allGames.find(g => String(g.id) === String(selectedGameId));
+        if (gameToUpdate) {
+          // Make sure game_info exists
+          gameToUpdate.game_info = gameToUpdate.game_info || {};
+          gameToUpdate.game_info.coverArt = coverArtPath;
+          coverArtImage.src = coverArtPath;
+          coverArtImage.style.display = 'block';
+          coverArtPlaceholder.style.display = 'none';
+        }
+      } else if (coverArtPath && coverArtPath.error) {
+        alert('Error selecting cover art: ' + coverArtPath.error);
+      }
+    });
+
+    btnSaveGameInfo.addEventListener('click', async () => {
+      if (!selectedGameId) return;
+
+      // Get the current cover art path from the in-memory game object
+      const currentGame = allGames.find(g => String(g.id) === String(selectedGameId));
+      const currentCoverArt = currentGame?.game_info?.coverArt || '';
+
+      // Get the date from the calendar picker and format it as dd/mm/yyyy
+      let formattedDate = '';
+      if (infoReleaseDateEl.value) {
+        const dateParts = infoReleaseDateEl.value.split('-');
+        formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+      }
+
+      const game_info = {
+        developer: infoDeveloperEl.value,
+        publisher: infoPublisherEl.value,
+        releaseDate: formattedDate,
+        genre: infoGenreEl.value,
+        coverArt: currentCoverArt
+      };
+
+      const res = await window.api.saveGameInfo(selectedGameId, game_info);
+      if (res.success) {
+        alert('Game info saved!');
+        // Update the in-memory game list to reflect the changes
+        const updatedGame = allGames.find(g => String(g.id) === String(selectedGameId));
+        if (updatedGame) {
+          updatedGame.game_info = { ...updatedGame.game_info, ...game_info };
+        }
+      } else {
+        alert('Failed to save game info: ' + res.error);
+      }
+    });
+    
     function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[c]); }
 
     refreshList();
