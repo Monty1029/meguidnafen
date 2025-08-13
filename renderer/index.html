@@ -146,7 +146,6 @@
 
     systemDropdown.addEventListener('change', updateSelectedFolderPath);
     
-    // Logic for delete button state
     function updateDeleteButtonState() {
       const selectedCount = document.querySelectorAll('.game-list .card.selected').length;
       btnDeleteSelected.disabled = selectedCount === 0;
@@ -166,7 +165,6 @@
       }
     });
 
-    // Delegated event listener for game cards to handle selection
     document.getElementById('gameList').addEventListener('click', (e) => {
       const card = e.target.closest('.card');
       if (card) {
@@ -174,7 +172,6 @@
           return;
         }
         
-        // Handle multi/single selection
         if (e.ctrlKey || e.metaKey) {
           card.classList.toggle('selected');
         } else {
@@ -187,7 +184,6 @@
         
         updateDeleteButtonState();
         
-        // Show info pane for the last clicked card
         const lastSelectedCard = document.querySelector('.game-list .card.selected');
         if (lastSelectedCard) {
           const gameId = lastSelectedCard.dataset.gameId;
@@ -299,11 +295,9 @@
         });
       });
       
-      // Make sure we hide the info pane and clear selection on list refresh
       hideInfoPane();
     }
 
-    // New info pane functions
     function showInfoPane(gameId) {
       const game = allGames.find(g => String(g.id) === String(gameId));
       if (!game) return;
@@ -314,7 +308,6 @@
       gameTitleEl.textContent = game.name;
       infoDeveloperEl.value = game.game_info?.developer || '';
       infoPublisherEl.value = game.game_info?.publisher || '';
-      // The `date` input field expects a 'YYYY-MM-DD' format. We convert our stored 'dd/mm/yyyy' here.
       if (game.game_info?.releaseDate) {
         const [day, month, year] = game.game_info.releaseDate.split('/');
         infoReleaseDateEl.value = `${year}-${month}-${day}`;
@@ -325,7 +318,7 @@
 
       const coverArtPath = game.game_info?.coverArt;
       if (coverArtPath) {
-        coverArtImage.src = coverArtPath;
+        coverArtImage.src = `file://${coverArtPath}`;
         coverArtImage.style.display = 'block';
         coverArtPlaceholder.style.display = 'none';
       } else {
@@ -337,7 +330,6 @@
     function hideInfoPane() {
       infoPane.classList.add('hidden');
       selectedGameId = null;
-      // Clear the pane's fields
       gameTitleEl.textContent = '';
       infoDeveloperEl.value = '';
       infoPublisherEl.value = '';
@@ -358,10 +350,9 @@
       if (coverArtPath && !coverArtPath.error) {
         const gameToUpdate = allGames.find(g => String(g.id) === String(selectedGameId));
         if (gameToUpdate) {
-          // Make sure game_info exists
           gameToUpdate.game_info = gameToUpdate.game_info || {};
           gameToUpdate.game_info.coverArt = coverArtPath;
-          coverArtImage.src = coverArtPath;
+          coverArtImage.src = `file://${coverArtPath}`;;
           coverArtImage.style.display = 'block';
           coverArtPlaceholder.style.display = 'none';
         }
@@ -373,11 +364,9 @@
     btnSaveGameInfo.addEventListener('click', async () => {
       if (!selectedGameId) return;
 
-      // Get the current cover art path from the in-memory game object
       const currentGame = allGames.find(g => String(g.id) === String(selectedGameId));
       const currentCoverArt = currentGame?.game_info?.coverArt || '';
 
-      // Get the date from the calendar picker and format it as dd/mm/yyyy
       let formattedDate = '';
       if (infoReleaseDateEl.value) {
         const dateParts = infoReleaseDateEl.value.split('-');
@@ -395,7 +384,6 @@
       const res = await window.api.saveGameInfo(selectedGameId, game_info);
       if (res.success) {
         alert('Game info saved!');
-        // Update the in-memory game list to reflect the changes
         const updatedGame = allGames.find(g => String(g.id) === String(selectedGameId));
         if (updatedGame) {
           updatedGame.game_info = { ...updatedGame.game_info, ...game_info };

@@ -3,13 +3,11 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
-// Define the root of the project using app.getAppPath()
 const PROJECT_ROOT = app.getAppPath();
 const USER_DATA_DIR = path.join(PROJECT_ROOT, 'userData');
 const STORE_FILE = path.join(USER_DATA_DIR, 'userData.json');
 const COVER_ART_DIR = path.join(USER_DATA_DIR, 'coverArt');
 
-// Ensure the userData and coverArt directories exist
 if (!fs.existsSync(USER_DATA_DIR)) {
   fs.mkdirSync(USER_DATA_DIR);
 }
@@ -65,20 +63,17 @@ ipcMain.handle('select-folder', async (event, systemName) => {
 
   const store = readStore();
   
-  // Check for duplicate folder paths across all systems
   let updatedGames = store.games;
   for (const existingSystem in store.systemFolders) {
     if (store.systemFolders[existingSystem] === selectedPath && existingSystem !== systemName) {
-      // If a match is found, remove the games from the old system
       const filteredGames = updatedGames.filter(g => g.system !== existingSystem);
       updatedGames = filteredGames;
-      // Also remove the old system's folder path
       delete store.systemFolders[existingSystem];
     }
   }
 
   store.systemFolders[systemName] = selectedPath;
-  store.games = updatedGames; // Save the filtered games
+  store.games = updatedGames;
   writeStore(store);
 
   return selectedPath;
@@ -283,7 +278,6 @@ ipcMain.handle('get-dark-mode-state', async () => {
   return store.darkMode;
 });
 
-// Update this handler to use 'game_info' instead of 'metadata'
 ipcMain.handle('save-game-info', async (event, gameId, game_info) => {
   const store = readStore();
   const game = store.games.find(g => String(g.id) === String(gameId));
@@ -313,7 +307,7 @@ ipcMain.handle('select-cover-art', async (event, gameName) => {
 
   try {
     fs.copyFileSync(selectedFilePath, newFilePath);
-    return `userData/coverArt/${newFileName}`;
+    return newFilePath; 
   } catch (e) {
     console.error('Failed to copy cover art:', e);
     return { error: 'Failed to copy file' };
